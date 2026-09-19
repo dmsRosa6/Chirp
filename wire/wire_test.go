@@ -50,3 +50,42 @@ func TestBadFrame(t *testing.T) {
 		t.Fatal("expected a protocol error, got nil")
 	}
 }
+
+func TestReadReplySimple(t *testing.T) {
+	var buf bytes.Buffer
+	WriteOK(&buf)
+	reply, err := ReadReply(bufio.NewReader(&buf))
+	if err != nil {
+		t.Fatalf("ReadReply: %v", err)
+	}
+	if reply.Type != SimpleString || reply.Value != "OK" {
+		t.Fatalf("got %+v, want {SimpleString OK}", reply)
+	}
+}
+
+func TestReadReplyError(t *testing.T) {
+	var buf bytes.Buffer
+	WriteError(&buf, "usage: PUB <subject> <payload>")
+	reply, err := ReadReply(bufio.NewReader(&buf))
+	if err != nil {
+		t.Fatalf("ReadReply: %v", err)
+	}
+	if reply.Type != ErrorReply || reply.Value != "ERR usage: PUB <subject> <payload>" {
+		t.Fatalf("got %+v", reply)
+	}
+}
+
+func TestReadReplyBulkWithEmbeddedNewline(t *testing.T) {
+	// This is exactly the case a raw bufio.ReadString('\n') on the client
+	// side breaks on: a bulk payload that itself contains a newline.
+	payload := "line one\nline two"
+	var buf bytes.Buffer
+	WriteBulk(&buf, payload)
+	reply, err := ReadReply(bufio.NewReader(&buf))
+	if err != nil {
+		t.Fatalf("ReadReply: %v", err)
+	}
+	if reply.Type != BulkString || reply.Value != payload {
+		t.Fatalf("got %+v, want payload %q", reply, payload)
+	}
+}

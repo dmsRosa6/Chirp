@@ -1,9 +1,3 @@
-// Package repl is the read-eval-print loop: decode a command off the
-// wire, check its shape against the grammar, run it, write the reply,
-// repeat. It leans on two packages that don't know about each other:
-// wire (how bytes are framed) and grammar (what commands exist and how
-// many args they take). Handlers here only implement what a command
-// does — arity is already guaranteed correct by the time a handler runs.
 package repl
 
 import (
@@ -15,24 +9,31 @@ import (
 	"github.com/dmsRosa6/Chirp/wire"
 )
 
-// Handler runs a command's args and writes a reply. By the time a Handler
-// is called, grammar has already confirmed len(args) == spec.Args.
 type Handler func(w io.Writer, args []string) error
 
 var handlers = map[string]Handler{
-	"PING":  handlePing,
-	"PUB":   handlePub,
-	"SUB":   handleSub,
-	"UNSUB": handleUnsub,
+	"PING":   handlePing,
+	"CREATE": handleCreate,
+	"EXISTS": handleExists,
+	"PUB":    handlePub,
+	"SUB":    handleSub,
+	"UNSUB":  handleUnsub,
 }
 
 func handlePing(w io.Writer, args []string) error {
 	return wire.WriteSimple(w, "PONG")
 }
 
+func handleCreate(w io.Writer, args []string) error {
+	return wire.WriteSimple(w, "PONG")
+}
+
+func handleExists(w io.Writer, args []string) error {
+	return wire.WriteSimple(w, "PONG")
+}
+
 func handlePub(w io.Writer, args []string) error {
 	subject, payload := args[0], args[1]
-	// TODO(Phase 2): hand off to the subscription registry.
 	_ = subject
 	_ = payload
 	return wire.WriteOK(w)

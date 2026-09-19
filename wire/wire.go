@@ -78,3 +78,45 @@ func WriteBulk(w io.Writer, s string) error {
 	_, err := fmt.Fprintf(w, "$%d\r\n%s\r\n", len(s), s)
 	return err
 }
+
+type ReplyType int
+
+const (
+	SimpleString ReplyType = iota // +OK
+	ErrorReply                    // -ERR ...
+	BulkString                    // $<len>\r\n<bytes>\r\n
+)
+
+type Reply struct {
+	Type  ReplyType
+	Value string
+}
+
+func ReadReply(r *bufio.Reader) (Reply, error) {
+	line, err := readLine(r)
+	if err != nil {
+		return Reply{}, err
+	}
+	if len(line) == 0 {
+		return Reply{}, fmt.Errorf("protocol error: empty reply line")
+	}
+
+	switch line[0] {
+	case '+':
+		return Reply{Type: SimpleString, Value: line[1:]}, nil
+	case '-':
+		return Reply{Type: ErrorReply, Value: line[1:]}, nil
+	case '$':
+		size, err := strconv.Atoi(line[1:])
+		if err != nil || size < 0 {
+			return Reply{}, fmt.Errorf("protocol error: bad bulk length %q", line)
+		}
+		buf := make([]byte, size+2) // payload + trailing \r\n
+		if _, err := io.ReadFull(r, buf); err != nil {
+			return Reply{}, err
+		}
+		return Reply{Type: BulkString, Value: string(buf[:size])}, nil
+	default:
+		return Reply{}, fmt.Errorf("protocol error: unknown reply type %q", line[0])
+	}
+}

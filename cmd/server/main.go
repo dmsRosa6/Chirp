@@ -9,11 +9,11 @@ import (
 )
 
 func main() {
-	ln, err := net.Listen("tcp", ":8080")
+	ln, err := net.Listen("tcp", ":4222") // NATS's default port, felt fitting
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Println("chirp listening on :8080")
+	log.Println("chirp listening on :4222")
 
 	for {
 		conn, err := ln.Accept()

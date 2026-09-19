@@ -52,11 +52,11 @@ func main() {
 			fmt.Println("write error:", err)
 			return
 		}
-		reply, err := server.ReadString('\n')
+		reply, err := wire.ReadReply(server)
 		if err != nil {
 			fmt.Println("connection lost:", err)
 			return
 		}
-		fmt.Print(reply)
+		fmt.Println(reply.Value)
 	}
 }
