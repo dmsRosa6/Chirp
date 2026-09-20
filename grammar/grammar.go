@@ -21,3 +21,9 @@ func Lookup(name string) (Spec, bool) {
 	spec, ok := Commands[strings.ToUpper(name)]
 	return spec, ok
 }
+
+const (
+	REPL_DELIMITER       string = " "
+	QUEUE_PATH_DELIMITER string = "."
+	QUEUE_PATH_WILDCARD  string = "*"
+)
