@@ -2,14 +2,13 @@ package repl
 
 import (
 	"bufio"
-	"io"
 	"strings"
 
 	"github.com/dmsRosa6/Chirp/grammar"
 	"github.com/dmsRosa6/Chirp/wire"
 )
 
-type Handler func(w io.Writer, args []string) error
+type Handler func(s *Session, args []string) error
 
 var handlers = map[string]Handler{
 	"PING":   handlePing,
@@ -20,40 +19,47 @@ var handlers = map[string]Handler{
 	"UNSUB":  handleUnsub,
 }
 
-func handlePing(w io.Writer, args []string) error {
-	return wire.WriteSimple(w, "PONG")
+func handlePing(s *Session, args []string) error {
+	return wire.WriteSimple(s.W, "PONG")
 }
 
-func handleCreate(w io.Writer, args []string) error {
-	return wire.WriteSimple(w, "PONG")
+func handleCreate(s *Session, args []string) error {
+	if err := s.Broker.CreateQueue(args[0]); err != nil {
+		return wire.WriteError(s.W, err.Error())
+	}
+	return wire.WriteOK(s.W)
 }
 
-func handleExists(w io.Writer, args []string) error {
-	return wire.WriteSimple(w, "PONG")
+func handleExists(s *Session, args []string) error {
+	if s.Broker.QueueExists(args[0]) {
+		return wire.WriteSimple(s.W, "1")
+	}
+	return wire.WriteSimple(s.W, "0")
 }
 
-func handlePub(w io.Writer, args []string) error {
-	subject, payload := args[0], args[1]
-	_ = subject
-	_ = payload
-	return wire.WriteOK(w)
+func handlePub(s *Session, args []string) error {
+	if err := s.Broker.Publish(args[0], args[1]); err != nil {
+		return wire.WriteError(s.W, err.Error())
+	}
+	return wire.WriteOK(s.W)
 }
 
-func handleSub(w io.Writer, args []string) error {
-	subject, subID := args[0], args[1]
-	_ = subject
-	_ = subID
-	return wire.WriteOK(w)
+func handleSub(s *Session, args []string) error {
+	if err := s.Broker.Subscribe(s.Client, args[0], args[1]); err != nil {
+		return wire.WriteError(s.W, err.Error())
+	}
+	return wire.WriteOK(s.W)
 }
 
-func handleUnsub(w io.Writer, args []string) error {
-	subID := args[0]
-	_ = subID
-	return wire.WriteOK(w)
+func handleUnsub(s *Session, args []string) error {
+	if err := s.Broker.Unsubscribe(s.Client, args[0]); err != nil {
+		return wire.WriteError(s.W, err.Error())
+	}
+	return wire.WriteOK(s.W)
 }
 
 // Serve is the read-eval-print loop.
-func Serve(r *bufio.Reader, w io.Writer) error {
+func Serve(r *bufio.Reader, s *Session) error {
 	for {
 		frame, err := wire.ReadCommand(r)
 		if err != nil {
@@ -66,13 +72,13 @@ func Serve(r *bufio.Reader, w io.Writer) error {
 
 		spec, ok := grammar.Lookup(name)
 		if !ok {
-			if err := wire.WriteError(w, "unknown command: "+name); err != nil {
+			if err := wire.WriteError(s.W, "unknown command: "+name); err != nil {
 				return err
 			}
 			continue
 		}
 		if len(args) != spec.Args {
-			if err := wire.WriteError(w, "usage: "+spec.Usage); err != nil {
+			if err := wire.WriteError(s.W, "usage: "+spec.Usage); err != nil {
 				return err
 			}
 			continue
@@ -80,14 +86,12 @@ func Serve(r *bufio.Reader, w io.Writer) error {
 
 		h, ok := handlers[name]
 		if !ok {
-			// grammar knows this command but no handler is wired up for it —
-			// a programming error, not a user error.
-			if err := wire.WriteError(w, "not implemented: "+name); err != nil {
+			if err := wire.WriteError(s.W, "not implemented: "+name); err != nil {
 				return err
 			}
 			continue
 		}
-		if err := h(w, args); err != nil {
+		if err := h(s, args); err != nil {
 			return err
 		}
 	}
