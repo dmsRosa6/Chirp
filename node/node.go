@@ -45,7 +45,6 @@ func (n *Node) Start() {
 func (n *Node) handleConn(conn net.Conn) {
 	client := core.NewClient(conn)
 	defer func() {
-		n.DropClient(client)
 		conn.Close()
 	}()
 
@@ -68,32 +67,28 @@ func (n *Node) Publish(subject, payload string) error {
 	if err != nil {
 		return err
 	}
-	return q.Add(core.Message{Body: payload, Time: time.Now().UnixNano()})
+	return q.Publish(core.Message{Body: payload, Time: time.Now().UnixNano()})
 }
 
-func (n *Node) Subscribe(c *core.Client, subject, subID string) error {
+func (n *Node) Subscribe(c *core.Client, subject string) error {
 	q, err := n.qm.GetByFullPath(subject)
 	if err != nil {
 		return err
 	}
-	if !c.TrackSub(subID, &q) {
-		return fmt.Errorf("sub id %s already in use", subID)
+	if err := q.Subscribe(c); err != nil {
+		return fmt.Errorf("client %s already in use", c.Addr())
 	}
-	q.Subscribe(c)
 	return nil
 }
 
-func (n *Node) Unsubscribe(c *core.Client, subID string) error {
-	q, ok := c.UntrackSub(subID)
-	if !ok {
-		return fmt.Errorf("unknown sub id %s", subID)
+func (n *Node) Unsubscribe(c *core.Client, subject string) error {
+	q, err := n.qm.GetByFullPath(subject)
+	if err != nil {
+		return err
 	}
-	q.Unsubscribe(c)
-	return nil
-}
+	if err := q.Unsubscribe(c); err != nil {
+		return fmt.Errorf("unknown client %s")
+	}
 
-func (n *Node) DropClient(c *core.Client) {
-	for _, q := range c.DropAllSubs() {
-		q.Unsubscribe(c)
-	}
+	return nil
 }

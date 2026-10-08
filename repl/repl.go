@@ -45,7 +45,7 @@ func handlePub(s *Session, args []string) error {
 }
 
 func handleSub(s *Session, args []string) error {
-	if err := s.Broker.Subscribe(s.Client, args[0], args[1]); err != nil {
+	if err := s.Broker.Subscribe(s.Client, args[0]); err != nil {
 		return wire.WriteError(s.W, err.Error())
 	}
 	return wire.WriteOK(s.W)

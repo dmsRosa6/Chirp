@@ -10,9 +10,8 @@ type Broker interface {
 	CreateQueue(subject string) error
 	QueueExists(subject string) bool
 	Publish(subject, payload string) error
-	Subscribe(c *core.Client, subject, subID string) error
-	Unsubscribe(c *core.Client, subID string) error
-	DropClient(c *core.Client)
+	Subscribe(c *core.Client, subject string) error
+	Unsubscribe(c *core.Client, subject string) error
 }
 
 type Session struct {

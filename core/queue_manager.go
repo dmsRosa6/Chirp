@@ -34,11 +34,11 @@ func (qm *QueueManager) AddQueue(queue *Queue) error {
 	return nil
 }
 
-func (qm *QueueManager) GetByFullPath(path string) (Queue, error) {
+func (qm *QueueManager) GetByFullPath(path string) (*Queue, error) {
 	if q, ok := qm.queues[path]; !ok {
-		return Queue{}, fmt.Errorf("the queue %s does not exist.", path)
+		return nil, fmt.Errorf("the queue %s does not exist.", path)
 	} else {
-		return *q, nil
+		return q, nil
 	}
 }
 
