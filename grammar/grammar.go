@@ -9,12 +9,10 @@ type Spec struct {
 }
 
 var Commands = map[string]Spec{
-	"PING":   {Name: "PING", Args: 0, Usage: "PING"},
-	"CREATE": {Name: "CREATE", Args: 1, Usage: "CREATE <subject>"},
-	"EXISTS": {Name: "EXISTS", Args: 1, Usage: "EXISTS <subject>"},
-	"PUB":    {Name: "PUB", Args: 2, Usage: "PUB <subject> <payload>"},
-	"SUB":    {Name: "SUB", Args: 2, Usage: "SUB <subject> <sub_id>"},
-	"UNSUB":  {Name: "UNSUB", Args: 1, Usage: "UNSUB <sub_id>"},
+	"PING":  {Name: "PING", Args: 0, Usage: "PING"},
+	"PUB":   {Name: "PUB", Args: 2, Usage: "PUB <subject> <payload>"},
+	"SUB":   {Name: "SUB", Args: 2, Usage: "SUB <pattern> <sub_id>"},
+	"UNSUB": {Name: "UNSUB", Args: 1, Usage: "UNSUB <sub_id>"},
 }
 
 func Lookup(name string) (Spec, bool) {
@@ -23,7 +21,8 @@ func Lookup(name string) (Spec, bool) {
 }
 
 const (
-	REPL_DELIMITER       string = " "
-	QUEUE_PATH_DELIMITER string = "."
-	QUEUE_PATH_WILDCARD  string = "*"
+	// SubjectDelimiter separates the tokens of a subject: "orders.eu.created".
+	SubjectDelimiter = "."
+	// SubjectWildcard may end the last token of a pattern: "orders.eu.c*".
+	SubjectWildcard = "*"
 )

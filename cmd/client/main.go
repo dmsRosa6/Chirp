@@ -5,25 +5,58 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/dmsRosa6/Chirp/wire"
 )
 
-func splitLine(line string) []string {
-	fields := strings.Fields(line)
-	if len(fields) == 0 {
-		return nil
+const (
+	defaultAddr = "localhost:4222"
+	prompt      = "chirp> "
+)
+
+var (
+	printMu  sync.Mutex
+	quitting atomic.Bool // set on a deliberate exit so readLoop stays quiet
+)
+
+// show prints a frame that arrived while the user may be typing: it
+// overwrites the current prompt line, prints, and draws the prompt again.
+func show(line string) {
+	printMu.Lock()
+	defer printMu.Unlock()
+	fmt.Printf("\r\033[K%s\n%s", line, prompt)
+}
+
+func format(r wire.Reply) string {
+	if r.Type == wire.PushMessage {
+		return fmt.Sprintf("[%s] %s: %s", r.Args[1], r.Args[2], r.Args[3])
 	}
-	if strings.EqualFold(fields[0], "PUB") && len(fields) >= 3 {
-		rest := strings.SplitN(line, fields[1], 2)[1]
-		return []string{fields[0], fields[1], strings.TrimSpace(rest)}
+	return r.Value
+}
+
+// readLoop prints every frame the server sends, replies and pushes alike.
+// The server answers commands in order and pushes are a different frame type,
+// so there is nothing to match up.
+func readLoop(server *bufio.Reader) {
+	for {
+		reply, err := wire.ReadReply(server)
+		if err != nil {
+			if quitting.Load() {
+				return
+			}
+			printMu.Lock()
+			fmt.Println("\r\033[Kconnection lost:", err)
+			printMu.Unlock()
+			os.Exit(1)
+		}
+		show(format(reply))
 	}
-	return fields
 }
 
 func main() {
-	addr := "localhost:4222"
+	addr := defaultAddr
 	if len(os.Args) > 1 {
 		addr = os.Args[1]
 	}
@@ -32,31 +65,30 @@ func main() {
 		fmt.Println("could not connect:", err)
 		os.Exit(1)
 	}
-	defer conn.Close()
+	defer func() {
+		quitting.Store(true)
+		conn.Close()
+	}()
 
-	server := bufio.NewReader(conn)
+	go readLoop(bufio.NewReader(conn))
+
 	stdin := bufio.NewScanner(os.Stdin)
+	fmt.Printf("connected to %s\n", addr)
+	fmt.Println("commands: PING | PUB <subject> <payload> | SUB <pattern> <sub_id> | UNSUB <sub_id>")
+	fmt.Println("patterns may end in * (foo.b* matches foo.bar). Ctrl-D to quit.")
+	fmt.Print(prompt)
 
-	fmt.Printf("connected to %s. type a command (PING, PUB, SUB, UNSUB), Ctrl-D to quit.\n", addr)
-	for {
-		fmt.Print("chirp> ")
-		if !stdin.Scan() {
-			return
-		}
-		args := splitLine(stdin.Text())
+	for stdin.Scan() {
+		args := parseLine(stdin.Text())
 		if len(args) == 0 {
+			printMu.Lock()
+			fmt.Print(prompt)
+			printMu.Unlock()
 			continue
 		}
-
 		if err := wire.WriteCommand(conn, args...); err != nil {
 			fmt.Println("write error:", err)
 			return
 		}
-		reply, err := wire.ReadReply(server)
-		if err != nil {
-			fmt.Println("connection lost:", err)
-			return
-		}
-		fmt.Println(reply.Value)
 	}
 }

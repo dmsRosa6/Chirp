@@ -1,9 +1,8 @@
 package core
 
-import "net"
-
+// Message is one publish, as seen by the broker.
 type Message struct {
-	Body   string
-	Time   int64
-	Origin net.Addr
+	Subject string
+	Body    string
+	Time    int64 // unix nanoseconds, set by the broker on publish
 }

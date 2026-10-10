@@ -2,39 +2,44 @@ package node
 
 import (
 	"bufio"
-	"fmt"
+	"errors"
+	"io"
 	"log"
 	"net"
-	"time"
 
 	"github.com/dmsRosa6/Chirp/core"
 	"github.com/dmsRosa6/Chirp/repl"
 )
 
+// Node listens for connections and gives each one a session. It owns no
+// message routing; that is the broker's job.
 type Node struct {
-	addr       net.Addr
-	neighbours []net.Addr
-	qm         core.QueueManager
+	addr   net.Addr
+	broker *core.Broker
 }
 
-func New(addr net.Addr, neighbours []net.Addr) *Node {
-	return &Node{
-		addr:       addr,
-		neighbours: neighbours,
-		qm:         *core.NewQueueManager(),
-	}
+func New(addr net.Addr) *Node {
+	return &Node{addr: addr, broker: core.NewBroker(core.Config{})}
 }
 
-func (n *Node) Start() {
+// Start listens on the node's address and serves until the listener fails.
+func (n *Node) Start() error {
 	ln, err := net.Listen(n.addr.Network(), n.addr.String())
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
-	log.Println("chirp listening on", n.addr)
+	return n.Serve(ln)
+}
 
+// Serve accepts connections on ln until it is closed.
+func (n *Node) Serve(ln net.Listener) error {
+	log.Println("chirp listening on", ln.Addr())
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
+			if errors.Is(err, net.ErrClosed) {
+				return nil
+			}
 			log.Println("accept:", err)
 			continue
 		}
@@ -43,52 +48,12 @@ func (n *Node) Start() {
 }
 
 func (n *Node) handleConn(conn net.Conn) {
-	client := core.NewClient(conn)
-	defer func() {
-		conn.Close()
-	}()
+	// NewSession starts the writer goroutine, which owns conn from here on
+	// and closes it when the session ends.
+	s := core.NewSession(n.broker, conn, conn.RemoteAddr().String())
+	defer s.Close()
 
-	s := &repl.Session{W: conn, Client: client, Broker: n}
-	if err := repl.Serve(bufio.NewReader(conn), s); err != nil {
-		log.Println("connection closed:", err)
+	if err := repl.Serve(s, bufio.NewReader(conn)); err != nil && !errors.Is(err, io.EOF) {
+		log.Printf("connection %s closed: %v", s.Addr(), err)
 	}
-}
-
-func (n *Node) CreateQueue(subject string) error {
-	return n.qm.AddQueue(core.NewQueue(subject))
-}
-
-func (n *Node) QueueExists(subject string) bool {
-	return n.qm.ExistsByFullPath(subject)
-}
-
-func (n *Node) Publish(subject, payload string) error {
-	q, err := n.qm.GetByFullPath(subject)
-	if err != nil {
-		return err
-	}
-	return q.Publish(core.Message{Body: payload, Time: time.Now().UnixNano()})
-}
-
-func (n *Node) Subscribe(c *core.Client, subject string) error {
-	q, err := n.qm.GetByFullPath(subject)
-	if err != nil {
-		return err
-	}
-	if err := q.Subscribe(c); err != nil {
-		return fmt.Errorf("client %s already in use", c.Addr())
-	}
-	return nil
-}
-
-func (n *Node) Unsubscribe(c *core.Client, subject string) error {
-	q, err := n.qm.GetByFullPath(subject)
-	if err != nil {
-		return err
-	}
-	if err := q.Unsubscribe(c); err != nil {
-		return fmt.Errorf("unknown client %s")
-	}
-
-	return nil
 }

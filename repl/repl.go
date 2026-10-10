@@ -4,89 +4,89 @@ import (
 	"bufio"
 	"strings"
 
+	"github.com/dmsRosa6/Chirp/core"
 	"github.com/dmsRosa6/Chirp/grammar"
 	"github.com/dmsRosa6/Chirp/wire"
 )
 
-type Handler func(s *Session, args []string) error
+// Handler runs one validated command. It replies through the session; it
+// never writes to the socket. A returned error ends the connection.
+type Handler func(s *core.Session, args []string) error
 
 var handlers = map[string]Handler{
-	"PING":   handlePing,
-	"CREATE": handleCreate,
-	"EXISTS": handleExists,
-	"PUB":    handlePub,
-	"SUB":    handleSub,
-	"UNSUB":  handleUnsub,
+	"PING":  handlePing,
+	"PUB":   handlePub,
+	"SUB":   handleSub,
+	"UNSUB": handleUnsub,
 }
 
-func handlePing(s *Session, args []string) error {
-	return wire.WriteSimple(s.W, "PONG")
+func handlePing(s *core.Session, args []string) error {
+	return s.Simple("PONG")
 }
 
-func handleCreate(s *Session, args []string) error {
-	if err := s.Broker.CreateQueue(args[0]); err != nil {
-		return wire.WriteError(s.W, err.Error())
+func handlePub(s *core.Session, args []string) error {
+	subject, payload := args[0], args[1]
+	if err := grammar.ValidateSubject(subject); err != nil {
+		return s.Err(err.Error())
 	}
-	return wire.WriteOK(s.W)
+	s.Broker().Publish(subject, payload)
+	return s.OK()
 }
 
-func handleExists(s *Session, args []string) error {
-	if s.Broker.QueueExists(args[0]) {
-		return wire.WriteSimple(s.W, "1")
+func handleSub(s *core.Session, args []string) error {
+	pattern, subID := args[0], args[1]
+	if err := grammar.ValidatePattern(pattern); err != nil {
+		return s.Err(err.Error())
 	}
-	return wire.WriteSimple(s.W, "0")
-}
-
-func handlePub(s *Session, args []string) error {
-	if err := s.Broker.Publish(args[0], args[1]); err != nil {
-		return wire.WriteError(s.W, err.Error())
+	if err := grammar.ValidateSubID(subID); err != nil {
+		return s.Err(err.Error())
 	}
-	return wire.WriteOK(s.W)
-}
-
-func handleSub(s *Session, args []string) error {
-	if err := s.Broker.Subscribe(s.Client, args[0]); err != nil {
-		return wire.WriteError(s.W, err.Error())
+	if err := s.Broker().Subscribe(s, pattern, subID); err != nil {
+		return s.Err(err.Error())
 	}
-	return wire.WriteOK(s.W)
+	return s.OK()
 }
 
-func handleUnsub(s *Session, args []string) error {
-	if err := s.Broker.Unsubscribe(s.Client, args[0]); err != nil {
-		return wire.WriteError(s.W, err.Error())
+func handleUnsub(s *core.Session, args []string) error {
+	if err := s.Broker().Unsubscribe(s, args[0]); err != nil {
+		return s.Err(err.Error())
 	}
-	return wire.WriteOK(s.W)
+	return s.OK()
 }
 
-// Serve is the read-eval-print loop.
-func Serve(r *bufio.Reader, s *Session) error {
+// Serve is the read-eval-reply loop for one connection. It returns when the
+// connection ends (io.EOF on a clean disconnect) or a reply can't be queued.
+func Serve(s *core.Session, r *bufio.Reader) error {
 	for {
 		frame, err := wire.ReadCommand(r)
 		if err != nil {
-			return err // includes io.EOF on clean disconnect
+			if wire.IsProtocolError(err) {
+				_ = s.Err(err.Error()) // best effort; the writer flushes it on Close
+			}
+			return err
 		}
 		if len(frame) == 0 {
 			continue
 		}
-		name, args := strings.ToUpper(frame[0]), frame[1:]
 
-		spec, ok := grammar.Lookup(name)
+		spec, ok := grammar.Lookup(frame[0])
 		if !ok {
-			if err := wire.WriteError(s.W, "unknown command: "+name); err != nil {
+			if err := s.Err("unknown command: " + strings.ToUpper(frame[0])); err != nil {
 				return err
 			}
 			continue
 		}
+		args := frame[1:]
 		if len(args) != spec.Args {
-			if err := wire.WriteError(s.W, "usage: "+spec.Usage); err != nil {
+			if err := s.Err("usage: " + spec.Usage); err != nil {
 				return err
 			}
 			continue
 		}
 
-		h, ok := handlers[name]
+		h, ok := handlers[spec.Name]
 		if !ok {
-			if err := wire.WriteError(s.W, "not implemented: "+name); err != nil {
+			if err := s.Err("not implemented: " + spec.Name); err != nil {
 				return err
 			}
 			continue

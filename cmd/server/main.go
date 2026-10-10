@@ -3,16 +3,25 @@ package main
 import (
 	"log"
 	"net"
+	"os"
 
 	"github.com/dmsRosa6/Chirp/node"
 )
 
+const defaultAddr = "localhost:4222"
+
 func main() {
-	addr, err := net.ResolveTCPAddr("tcp", "localhost:8080")
+	listen := defaultAddr
+	if len(os.Args) > 1 {
+		listen = os.Args[1]
+	}
+
+	addr, err := net.ResolveTCPAddr("tcp", listen)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	node := node.New(addr, nil)
-	node.Start()
+	if err := node.New(addr).Start(); err != nil {
+		log.Fatal(err)
+	}
 }
