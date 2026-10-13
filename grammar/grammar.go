@@ -11,7 +11,7 @@ type Spec struct {
 var Commands = map[string]Spec{
 	"PING":  {Name: "PING", Args: 0, Usage: "PING"},
 	"PUB":   {Name: "PUB", Args: 2, Usage: "PUB <subject> <payload>"},
-	"SUB":   {Name: "SUB", Args: 2, Usage: "SUB <pattern> <sub_id>"},
+	"SUB":   {Name: "SUB", Args: 3, Usage: "SUB <pattern> <sub_id> <group_id>"},
 	"UNSUB": {Name: "UNSUB", Args: 1, Usage: "UNSUB <sub_id>"},
 }
 

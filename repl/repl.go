@@ -35,13 +35,20 @@ func handlePub(s *core.Session, args []string) error {
 
 func handleSub(s *core.Session, args []string) error {
 	pattern, subID := args[0], args[1]
+	var groupID string
+	if len(args) == 3 {
+		groupID = args[2]
+		if err := grammar.ValidateGroupID(groupID); err != nil {
+			return s.Err(err.Error())
+		}
+	}
 	if err := grammar.ValidatePattern(pattern); err != nil {
 		return s.Err(err.Error())
 	}
 	if err := grammar.ValidateSubID(subID); err != nil {
 		return s.Err(err.Error())
 	}
-	if err := s.Broker().Subscribe(s, pattern, subID); err != nil {
+	if err := s.Broker().Subscribe(s, pattern, subID, groupID); err != nil {
 		return s.Err(err.Error())
 	}
 	return s.OK()
@@ -61,7 +68,7 @@ func Serve(s *core.Session, r *bufio.Reader) error {
 		frame, err := wire.ReadCommand(r)
 		if err != nil {
 			if wire.IsProtocolError(err) {
-				_ = s.Err(err.Error()) // best effort; the writer flushes it on Close
+				_ = s.Err(err.Error())
 			}
 			return err
 		}

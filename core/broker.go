@@ -5,6 +5,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"log"
+
 	"github.com/dmsRosa6/Chirp/data_structs"
 	"github.com/dmsRosa6/Chirp/grammar"
 )
@@ -20,7 +22,8 @@ type Config struct {
 
 // patternEntry is everything subscribed under one exact pattern string.
 type patternEntry struct {
-	subs map[subKey]*Subscription
+	individuals map[subKey]*Subscription
+	groups      map[string]*Group
 }
 
 // Broker owns every subscription and routes publishes to them.
@@ -46,9 +49,9 @@ func NewBroker(cfg Config) *Broker {
 	}
 }
 
-// Subscribe registers pattern for the session under subID. The caller is
+// Subscribe registers pattern for the session under subID, this subscritions can be grouped by groupID. The caller is
 // expected to have validated the pattern and the id.
-func (b *Broker) Subscribe(s *Session, pattern, subID string) error {
+func (b *Broker) Subscribe(s *Session, pattern, subID, groupID string) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -61,8 +64,18 @@ func (b *Broker) Subscribe(s *Session, pattern, subID string) error {
 	if e, ok := b.trie.FindOne(pattern); ok {
 		entry = *e
 	} else {
-		entry = &patternEntry{subs: make(map[subKey]*Subscription)}
+		entry = &patternEntry{
+			individuals: make(map[subKey]*Subscription),
+			groups:      make(map[string]*Group),
+		}
 		b.trie.Add(pattern, entry)
+	}
+	if groupID != "" {
+		if v, ok := entry.groups[groupID]; ok {
+			v
+		} else {
+			entry.groups[groupID] = &Group{}
+		}
 	}
 	entry.subs[sub.key()] = sub
 	b.count++
@@ -99,6 +112,7 @@ func (b *Broker) Publish(subject, payload string) int {
 	b.mu.RUnlock()
 
 	for _, sub := range targets {
+		log.Default().Printf("Send message to %s...", sub.Session.addr)
 		sub.deliver(msg)
 	}
 	return len(targets)

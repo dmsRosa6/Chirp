@@ -9,6 +9,7 @@ import (
 const (
 	MaxSubjectLen = 255
 	MaxSubIDLen   = 64
+	MaxGroupIdLen = 64
 )
 
 // ValidateSubject checks a concrete subject (what PUB takes): dot-separated
@@ -30,6 +31,16 @@ func ValidateSubID(id string) error {
 	return nil
 }
 
+// ValidateGroupID checks a group id chosen by the client.
+func ValidateGroupID(id string) error {
+	if id == "" {
+		return errors.New("group id is empty")
+	}
+	if len(id) > MaxGroupIdLen {
+		return fmt.Errorf("group id too long (max %d bytes)", MaxGroupIdLen)
+	}
+	return nil
+}
 func validate(s string, allowWildcard bool) error {
 	if s == "" {
 		return errors.New("subject is empty")
