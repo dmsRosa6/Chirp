@@ -7,8 +7,8 @@ func TestLookupKnownCommand(t *testing.T) {
 	if !ok {
 		t.Fatal("expected PUB to be found")
 	}
-	if spec.Name != "PUB" || spec.Args != 2 {
-		t.Fatalf("got %+v, want Name=PUB Args=2", spec)
+	if spec.Name != "PUB" || spec.MinArgs != 2 || spec.MaxArgs != 2 {
+		t.Fatalf("got %+v, want Name=PUB MinArgs=2, MaxArgs=2", spec)
 	}
 }
 

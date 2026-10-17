@@ -1,6 +1,8 @@
 package core
 
 import (
+	"fmt"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -9,6 +11,7 @@ import (
 
 	"github.com/dmsRosa6/Chirp/data_structs"
 	"github.com/dmsRosa6/Chirp/grammar"
+	"github.com/dmsRosa6/Chirp/model"
 )
 
 // DefaultOutBuffer is how many frames may wait to be written to one session
@@ -18,12 +21,6 @@ const DefaultOutBuffer = 256
 // Config tunes the broker. Zero values mean defaults.
 type Config struct {
 	OutBuffer int
-}
-
-// patternEntry is everything subscribed under one exact pattern string.
-type patternEntry struct {
-	individuals map[subKey]*Subscription
-	groups      map[string]*Group
 }
 
 // Broker owns every subscription and routes publishes to them.
@@ -49,6 +46,23 @@ func NewBroker(cfg Config) *Broker {
 	}
 }
 
+func (b *Broker) Get(subject string) ([]model.Subject, error) {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+
+	entries := b.trie.Match(subject)
+	if len(entries) == 0 {
+		return nil, fmt.Errorf("there is no subject matching '%s'", subject)
+	}
+
+	out := make([]model.Subject, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, e.snapshot())
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Pattern < out[j].Pattern })
+	return out, nil
+}
+
 // Subscribe registers pattern for the session under subID, this subscritions can be grouped by groupID. The caller is
 // expected to have validated the pattern and the id.
 func (b *Broker) Subscribe(s *Session, pattern, subID, groupID string) error {
@@ -65,19 +79,24 @@ func (b *Broker) Subscribe(s *Session, pattern, subID, groupID string) error {
 		entry = *e
 	} else {
 		entry = &patternEntry{
-			individuals: make(map[subKey]*Subscription),
-			groups:      make(map[string]*Group),
+			pattern: pattern,
+			subs:    make(map[subKey]*Subscription),
+			groups:  make(map[string]*Group),
 		}
 		b.trie.Add(pattern, entry)
 	}
 	if groupID != "" {
 		if v, ok := entry.groups[groupID]; ok {
-			v
+			v.AddSubscription(sub.key(), sub)
 		} else {
-			entry.groups[groupID] = &Group{}
+			g := NewGroup(groupID, pattern)
+			g.AddSubscription(sub.key(), sub)
+			entry.groups[groupID] = g
 		}
+	} else {
+		entry.subs[sub.key()] = sub
 	}
-	entry.subs[sub.key()] = sub
+
 	b.count++
 	return nil
 }
@@ -107,6 +126,9 @@ func (b *Broker) Publish(subject, payload string) int {
 	for _, entry := range b.trie.Match(subject) {
 		for _, sub := range entry.subs {
 			targets = append(targets, sub)
+		}
+		for _, g := range entry.groups {
+			targets = append(targets, g.GetRandom())
 		}
 	}
 	b.mu.RUnlock()

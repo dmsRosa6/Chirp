@@ -14,14 +14,32 @@ import (
 type Handler func(s *core.Session, args []string) error
 
 var handlers = map[string]Handler{
-	"PING":  handlePing,
-	"PUB":   handlePub,
-	"SUB":   handleSub,
-	"UNSUB": handleUnsub,
+	"PING":    handlePing,
+	"CHANNEL": handleChannel,
+	"GET":     handleGet,
+	"PUB":     handlePub,
+	"SUB":     handleSub,
+	"UNSUB":   handleUnsub,
 }
 
 func handlePing(s *core.Session, args []string) error {
 	return s.Simple("PONG")
+}
+
+func handleChannel(s *core.Session, args []string) error {
+	return s.Simple("OK")
+}
+
+func handleGet(s *core.Session, args []string) error {
+	subject := args[0]
+	if err := grammar.ValidateSubject(subject); err != nil {
+		return s.Err(err.Error())
+	}
+	info, err := s.Broker().Get(subject)
+	if err != nil {
+		return s.Err(err.Error())
+	}
+	return s.Bulk(info[0].String())
 }
 
 func handlePub(s *core.Session, args []string) error {
@@ -84,7 +102,7 @@ func Serve(s *core.Session, r *bufio.Reader) error {
 			continue
 		}
 		args := frame[1:]
-		if len(args) != spec.Args {
+		if len(args) < spec.MinArgs || len(args) > spec.MaxArgs {
 			if err := s.Err("usage: " + spec.Usage); err != nil {
 				return err
 			}

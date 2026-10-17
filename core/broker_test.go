@@ -42,7 +42,7 @@ func frames(t *testing.T, s *Session, buf *bytes.Buffer) []wire.Reply {
 
 func mustSub(t *testing.T, b *Broker, s *Session, pattern, id string) {
 	t.Helper()
-	if err := b.Subscribe(s, pattern, id); err != nil {
+	if err := b.Subscribe(s, pattern, id, ""); err != nil {
 		t.Fatalf("Subscribe(%q, %q): %v", pattern, id, err)
 	}
 }
@@ -127,7 +127,7 @@ func TestSubIDsAreScopedPerSession(t *testing.T) {
 	mustSub(t, b, s1, "foo", "sub1")
 	mustSub(t, b, s2, "foo", "sub1") // same id, different session: fine
 
-	if err := b.Subscribe(s1, "bar", "sub1"); !errors.Is(err, ErrSubIDInUse) {
+	if err := b.Subscribe(s1, "bar", "sub1", ""); !errors.Is(err, ErrSubIDInUse) {
 		t.Fatalf("duplicate id: got %v, want ErrSubIDInUse", err)
 	}
 }
@@ -172,7 +172,7 @@ func TestCloseRemovesSubscriptions(t *testing.T) {
 	if got := b.Publish("foo", "x"); got != 0 {
 		t.Fatalf("publish reached %d subscriptions of a closed session", got)
 	}
-	if err := b.Subscribe(s, "foo", "c"); !errors.Is(err, ErrSessionClosed) {
+	if err := b.Subscribe(s, "foo", "c", ""); !errors.Is(err, ErrSessionClosed) {
 		t.Fatalf("Subscribe on closed session: got %v, want ErrSessionClosed", err)
 	}
 }
@@ -245,8 +245,8 @@ func TestConcurrentSubscribePublishClose(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			s := NewSession(b, io.Discard, "c")
-			_ = b.Subscribe(s, "c.*", "s")
-			_ = b.Subscribe(s, "c.x", "t")
+			_ = b.Subscribe(s, "c.*", "s", "")
+			_ = b.Subscribe(s, "c.x", "t", "")
 			for j := 0; j < 20; j++ {
 				b.Publish("c.x", strings.Repeat("p", 10))
 			}
