@@ -16,6 +16,7 @@ type Handler func(s *core.Session, args []string) error
 var handlers = map[string]Handler{
 	"PING":    handlePing,
 	"CHANNEL": handleChannel,
+	"DROP":    handleDrop,
 	"GET":     handleGet,
 	"PUB":     handlePub,
 	"SUB":     handleSub,
@@ -27,6 +28,10 @@ func handlePing(s *core.Session, args []string) error {
 }
 
 func handleChannel(s *core.Session, args []string) error {
+	return s.Simple("OK")
+}
+
+func handleDrop(s *core.Session, args []string) error {
 	return s.Simple("OK")
 }
 

@@ -12,7 +12,8 @@ type Spec struct {
 var Commands = map[string]Spec{
 	"PING":    {Name: "PING", MinArgs: 0, MaxArgs: 0, Usage: "PING"},
 	"PUB":     {Name: "PUB", MinArgs: 2, MaxArgs: 2, Usage: "PUB <pattern> <payload>"},
-	"CHANNEL": {Name: "PUB", MinArgs: 2, MaxArgs: 2, Usage: "PUB <subject> <payload>"},
+	"CHANNEL": {Name: "CHANNEL", MinArgs: 1, MaxArgs: 1, Usage: "CHANNEL <subject>"},
+	"DROP":    {Name: "DROP", MinArgs: 1, MaxArgs: 1, Usage: "DROP <subject>"},
 	"SUB":     {Name: "SUB", MinArgs: 2, MaxArgs: 3, Usage: "SUB <pattern> <sub_id> (<group_id>)?"},
 	"UNSUB":   {Name: "UNSUB", MinArgs: 2, MaxArgs: 2, Usage: "UNSUB <pattern> <sub_id>"},
 	"GET":     {Name: "GET", MinArgs: 1, MaxArgs: 1, Usage: "GET <subject>"},
